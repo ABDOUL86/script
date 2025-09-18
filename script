@@ -1,0 +1,305 @@
+-- SCRIPT POUR BLOX FRUITS - DELTA EXECUTOR
+-- FONCTIONNALITÉS : FREEZE TRADE + AUTO ACCEPT
+-- AVEC INTERFACE UTILISATEUR COMPLÈTE
+
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Vérification Delta Executor
+if not delta then
+    warn("⚠️ Ce script nécessite Delta Executor!")
+    return
+end
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local freezeEnabled = false
+local autoAcceptEnabled = false
+local tradeActive = false
+
+-- Création de l'interface
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BloxFruitsTradeGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- Fenêtre principale
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 350, 0, 250)
+MainFrame.Position = UDim2.new(0.5, -175, 0.5, -125)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+-- Coins arrondis
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = MainFrame
+
+-- Titre
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🍍 BLOX FRUITS TRADE CONTROL"
+Title.TextColor3 = Color3.fromRGB(255, 215, 0)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+-- Bouton Freeze
+local FreezeBtn = Instance.new("TextButton")
+FreezeBtn.Size = UDim2.new(0, 150, 0, 40)
+FreezeBtn.Position = UDim2.new(0, 20, 0, 60)
+FreezeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+FreezeBtn.Text = "FREEZE: OFF"
+FreezeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FreezeBtn.Font = Enum.Font.Gotham
+FreezeBtn.TextScaled = true
+FreezeBtn.Parent = MainFrame
+
+local FreezeCorner = Instance.new("UICorner")
+FreezeCorner.CornerRadius = UDim.new(0, 8)
+FreezeCorner.Parent = FreezeBtn
+
+-- Bouton Auto Accept
+local AcceptBtn = Instance.new("TextButton")
+AcceptBtn.Size = UDim2.new(0, 150, 0, 40)
+AcceptBtn.Position = UDim2.new(0, 180, 0, 60)
+AcceptBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AcceptBtn.Text = "AUTO ACCEPT: OFF"
+AcceptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AcceptBtn.Font = Enum.Font.Gotham
+AcceptBtn.TextScaled = true
+AcceptBtn.Parent = MainFrame
+
+local AcceptCorner = Instance.new("UICorner")
+AcceptCorner.CornerRadius = UDim.new(0, 8)
+AcceptCorner.Parent = AcceptBtn
+
+-- Bouton Toggle GUI
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 30, 0, 30)
+ToggleBtn.Position = UDim2.new(1, -35, 0, 5)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+ToggleBtn.Text = "X"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextScaled = true
+ToggleBtn.Parent = MainFrame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 5)
+ToggleCorner.Parent = ToggleBtn
+
+-- Status
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, 0, 0, 30)
+Status.Position = UDim2.new(0, 0, 0, 120)
+Status.BackgroundTransparency = 1
+Status.Text = "STATUS: EN ATTENTE DE TRADE"
+Status.TextColor3 = Color3.fromRGB(100, 255, 100)
+Status.TextScaled = true
+Status.Font = Enum.Font.Gotham
+Status.Parent = MainFrame
+
+-- Instructions
+local Instructions = Instance.new("TextLabel")
+Instructions.Size = UDim2.new(1, 0, 0, 60)
+Instructions.Position = UDim2.new(0, 0, 0, 160)
+Instructions.BackgroundTransparency = 1
+Instructions.Text = "Appuyez sur RIGHT CONTROL pour afficher/masquer\nFonctionne uniquement en trade actif"
+Instructions.TextColor3 = Color3.fromRGB(200, 200, 200)
+Instructions.TextScaled = true
+Instructions.Font = Enum.Font.Gotham
+Instructions.TextTransparency = 0.5
+Instructions.Parent = MainFrame
+
+-- Fonctions utilitaires
+local function updateButtons()
+    FreezeBtn.BackgroundColor3 = freezeEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(50, 50, 50)
+    FreezeBtn.Text = "FREEZE: " .. (freezeEnabled and "ON" or "OFF")
+    
+    AcceptBtn.BackgroundColor3 = autoAcceptEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(50, 50, 50)
+    AcceptBtn.Text = "AUTO ACCEPT: " .. (autoAcceptEnabled and "ON" or "OFF")
+end
+
+local function findTradeUI()
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui.Name:find("Trade") or gui.Name:find("trade") then
+            return gui
+        end
+    end
+    return nil
+end
+
+local function freezeTrade(tradeUI)
+    if not freezeEnabled then return end
+    
+    -- Cherche le timer dans différentes configurations possibles
+    local timerFound = false
+    
+    -- Cherche dans les descendants
+    for _, obj in pairs(tradeUI:GetDescendants()) do
+        if obj:IsA("TextLabel") and (obj.Text:find("Timer") or obj.Text:find("Time") or obj.Name:find("Timer")) then
+            -- Gèle le timer
+            local originalText = obj.Text
+            obj.Text = "FROZEN"
+            obj.TextColor3 = Color3.fromRGB(0, 255, 255)
+            
+            -- Empêche la mise à jour
+            obj:GetPropertyChangedSignal("Text"):Connect(function()
+                if freezeEnabled then
+                    obj.Text = "FROZEN"
+                end
+            end)
+            
+            timerFound = true
+            Status.Text = "STATUS: TRADE GELÉ!"
+            break
+        end
+    end
+    
+    if not timerFound then
+        -- Méthode alternative : désactiver les scripts du trade
+        for _, script in pairs(tradeUI:GetDescendants()) do
+            if script:IsA("LocalScript") then
+                script.Disabled = true
+            end
+        end
+        Status.Text = "STATUS: TRADE GELÉ (SCRIPTS)"
+    end
+end
+
+local function autoAcceptTrade(tradeUI)
+    if not autoAcceptEnabled then return end
+    
+    -- Cherche le bouton accept
+    for _, btn in pairs(tradeUI:GetDescendants()) do
+        if btn:IsA("TextButton") and (
+            btn.Text:lower():find("accept") or 
+            btn.Text:lower():find("confirmer") or 
+            btn.Name:lower():find("accept")
+        ) then
+            -- Simule un clic après un délai
+            spawn(function()
+                wait(1.5) -- Délai avant acceptation
+                if autoAcceptEnabled and btn.Parent then
+                    -- Crée un événement de souris
+                    local mouse = LocalPlayer:GetMouse()
+                    btn.MouseButton1Click:Fire()
+                    
+                    -- Alternative si Fire ne fonctionne pas
+                    local absolutePos = btn.AbsolutePosition
+                    local absoluteSize = btn.AbsoluteSize
+                    mouse.TargetFilter = btn
+                    mouse.X = absolutePos.X + absoluteSize.X/2
+                    mouse.Y = absolutePos.Y + absoluteSize.Y/2
+                    mouse1click()
+                    
+                    Status.Text = "STATUS: TRADE ACCEPTÉ!"
+                end
+            end)
+            break
+        end
+    end
+end
+
+-- Surveillance des trades
+spawn(function()
+    while true do
+        wait(0.5)
+        local tradeUI = findTradeUI()
+        
+        if tradeUI and not tradeActive then
+            tradeActive = true
+            Status.Text = "STATUS: TRADE DÉTECTÉ!"
+            
+            -- Applique les fonctionnalités
+            freezeTrade(tradeUI)
+            autoAcceptTrade(tradeUI)
+            
+            -- Surveillance de la fin du trade
+            local connection
+            connection = tradeUI.AncestryChanged:Connect(function()
+                if not tradeUI.Parent then
+                    tradeActive = false
+                    connection:Disconnect()
+                    Status.Text = "STATUS: TRADE TERMINÉ"
+                end
+            end)
+        elseif not tradeUI and tradeActive then
+            tradeActive = false
+            Status.Text = "STATUS: TRADE TERMINÉ"
+        end
+    end
+end)
+
+-- Événements des boutons
+FreezeBtn.MouseButton1Click:Connect(function()
+    freezeEnabled = not freezeEnabled
+    updateButtons()
+    Status.Text = "STATUS: FREEZE " .. (freezeEnabled and "ACTIVÉ" else "DÉSACTIVÉ")
+    
+    if freezeEnabled and tradeActive then
+        local tradeUI = findTradeUI()
+        if tradeUI then freezeTrade(tradeUI) end
+    end
+end)
+
+AcceptBtn.MouseButton1Click:Connect(function()
+    autoAcceptEnabled = not autoAcceptEnabled
+    updateButtons()
+    Status.Text = "STATUS: AUTO ACCEPT " .. (autoAcceptEnabled and "ACTIVÉ" else "DÉSACTIVÉ")
+    
+    if autoAcceptEnabled and tradeActive then
+        local tradeUI = findTradeUI()
+        if tradeUI then autoAcceptTrade(tradeUI) end
+    end
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    ScreenGui.Enabled = not ScreenGui.Enabled
+end)
+
+-- Raccourci clavier
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        ScreenGui.Enabled = not ScreenGui.Enabled
+    end
+end)
+
+-- Initialisation
+updateButtons()
+Status.Text = "STATUS: PRÊT - RIGHT CONTROL POUR AFFICHER"
+
+-- Notification de démarrage
+local Notify = Instance.new("TextLabel")
+Notify.Size = UDim2.new(0, 300, 0, 50)
+Notify.Position = UDim2.new(0.5, -150, 0, 50)
+Notify.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Notify.Text = "🍍 BLOX FRUITS TRADE CONTROL ACTIVÉ!"
+Notify.TextColor3 = Color3.fromRGB(255, 215, 0)
+Notify.TextScaled = true
+Notify.Font = Enum.Font.GothamBold
+Notify.Parent = ScreenGui
+
+local NotifyCorner = Instance.new("UICorner")
+NotifyCorner.CornerRadius = UDim.new(0, 10)
+NotifyCorner.Parent = Notify
+
+-- Animation de disparition
+spawn(function()
+    wait(3)
+    TweenService:Create(Notify, TweenInfo.new(1), {TextTransparency = 1, BackgroundTransparency = 1}):Play()
+    wait(1)
+    Notify:Destroy()
+end)
+
+print("🚀 Script Blox Fruits Trade Control chargé avec succès!")
