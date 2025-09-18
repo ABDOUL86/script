@@ -1,0 +1,31 @@
+-- Script Serveur (à placer dans ServerScriptService)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+-- Créer le RemoteEvent pour le forçage
+local tradeRemote = Instance.new("RemoteEvent")
+tradeRemote.Name = "TradeRemote"
+tradeRemote.Parent = ReplicatedStorage
+
+-- Gérer les demandes de forçage
+tradeRemote.OnServerEvent:Connect(function(player, action, targetPlayer)
+    if action == "ForceAccept" and targetPlayer then
+        -- Vérifier que le joueur a le droit de forcer (admin ou propriétaire)
+        if player.UserId == game.CreatorId then
+            -- Forcer le joueur cible à accepter
+            local targetGui = targetPlayer:WaitForChild("PlayerGui"):FindFirstChild("Trade")
+            if targetGui then
+                -- Trouver et cliquer sur le bouton d'acceptation
+                for _, btn in pairs(targetGui:GetDescendants()) do
+                    if btn:IsA("TextButton") and (
+                        btn.Text:lower():find("accept") or 
+                        btn.Name:lower():find("accept")
+                    ) then
+                        btn.MouseButton1Click:Fire()
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
